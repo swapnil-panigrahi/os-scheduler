@@ -5,6 +5,7 @@
 #include <unistd.h>
 #include <sys/wait.h>
 #include <time.h>
+#include "shared_queue.c"
 
 typedef struct History{
     char command[1000000];
