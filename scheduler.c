@@ -17,33 +17,27 @@ volatile sig_atomic_t terminate = 0;
 void termination_request(int);
 void scheduler(PriorityQueue*);
 
+pid_t pids[256];
+int globalProcess = 0;
+
 void termination_request(int signum) {
     (void) signum;
     terminate = 1;
 
     // Loop through all processes and wait for them to finish
-    int numProcesses = get_num_process(queue);
-    for (int i = 0; i < numProcesses; i++) {
-        scheduler(queue);
-        int status;
-        pid_t pid = wait(&status);
-
-        if (pid == -1) {
-            perror("wait");
-            // Handle the error appropriately
-        } else {
-            if (WIFEXITED(status)) {
-                printf("Process %d exited with status %d\n", pid, WEXITSTATUS(status));
-            } else {
-                printf("Process %d terminated abnormally\n", pid);
-            }
+    for (int i = 0; i < globalProcess; i++) {
+        if (kill(pids[i], 0) == 0){
+            kill(pids[i],SIGCONT);
         }
+        int status;
+        waitpid(pids[i], &status, 0);
     }
 
     destroy_priority_queue(queue);
     printf("Scheduler exiting...\n");
     exit(0);
 }
+
 
 int min(int x, int y){
     if (x<y) return x;
@@ -75,6 +69,10 @@ void scheduler(PriorityQueue* queue) {
                     execv(args[0], args);
                     perror("execv");
                     exit(EXIT_FAILURE);
+                }
+                else{
+                    pids[globalProcess] = P[i].pid;
+                    globalProcess++;
                 }
             }
             if (kill(P[i].pid, SIGCONT) == -1) {
