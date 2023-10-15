@@ -38,7 +38,8 @@ enum {
     LS_CMD,
     HISTORY_CMD,
     PIPE_CMD,
-    SCRIPT_CMD
+    SCRIPT_CMD,
+    SUBMIT_CMD
 };  //Commands enum
 
 void sigint_handler(int signum);
@@ -50,8 +51,37 @@ void hist();
 void dot_slash(char* input);
 void pipe_cmd(char* input);
 void script(char* input);
+void submit(char* input, PriorityQueue* queue);
 
-int main() {
+pid_t scheduler_pid;
+
+int main(int argc, char** argv) {
+    key_t key = ftok("keyfile", 'R');
+    int shmid = shmget(key, sizeof(int), 0666);
+
+    PriorityQueue* queue;
+    if (create_priority_queue(key, &queue) == -1){
+        perror("shared memory segment error");
+        return 1;
+    }
+
+    char shmid_str[32];
+    sprintf(shmid_str, "%d", shmid);
+    char shell_pid_str[32];
+    sprintf(shell_pid_str, "%d", getpid());
+    char* args[] = {"scheduler", shmid_str, shell_pid_str, argv[1], argv[2], NULL};
+
+    scheduler_pid = fork();
+    if (scheduler_pid == -1){
+        perror("scheduler fork");
+        return 0;
+    }
+    if (scheduler_pid == 0){
+        execv("./scheduler", args);
+        perror("execv");
+        exit(EXIT_FAILURE);
+    }
+
     char input[1000000];
     time_t input_time;
     clock_t start,end;
@@ -107,6 +137,9 @@ int main() {
 
         start = clock();
         switch(cmd){
+            case SUBMIT_CMD:
+                submit(input, queue);
+                break;
             case SCRIPT_CMD:
                 script(input);
                 break;
@@ -175,13 +208,18 @@ int main() {
 void sigint_handler(int signum) {
     (void)signum;  //Suppress unused variable warning
     ctrl_c = 1;
-    printf("\n\n");
+
+    
+    printf("Signal Sent!\n\n");
     for (int i=0; i<hist_indx; i++){    //Printing the command, PID, input time, exec time
         printf("\033[1;32mCommand:\033[0m %s\n", history[i].command);
         printf("\033[1;32mChild PID:\033[0m %d\n", history[i].child_pid);
         printf("\033[1;32mTime:\033[0m %s", ctime(&history[i].time));
         printf("\033[1;32mExecution Time:\033[0m %lf\n\n", history[i].exec_time);
     }
+    int status;
+    waitpid(scheduler_pid, &status, 0);
+
     exit(0);  // Terminate the program immediately
 }
 
@@ -217,6 +255,7 @@ int is_valid_cmd(char* input){
     }
     if ((strncmp(input, "./", 2) == 0)) return 1;
     if ((strncmp(input, "sh ", 3) == 0)) return 17;
+    if ((strncmp(input, "submit ", 7) == 0)) return 18;
     
     //Returning 0 for invalid command
     free(input_copy);
@@ -499,4 +538,28 @@ void script(char* input) {
             }
         }
     }
+}
+
+void submit(char* input, PriorityQueue* queue) {
+    char* dup_input = malloc(strlen(input) + 1); strcpy(dup_input, input);
+    char* token = strtok(dup_input, " ");
+
+    token = strtok(NULL, " ");
+    char executable[256];
+    strcpy(executable, token);
+
+    token = strtok(NULL, " ");
+    int priority = (token != NULL) ? atoi(token) : 1;
+
+    Process process;
+    strcpy(process.executable, executable);
+    process.priority = priority;
+    process.pid = -2;
+
+    if (!is_full(queue)){
+        enqueue(queue, &process);
+    }
+
+    free(dup_input);
+    return;
 }
