@@ -18,6 +18,7 @@ void termination_request(int);
 void scheduler(PriorityQueue*);
 
 pid_t pids[256];
+char* prcoess_name[256];
 int globalProcess = 0;
 
 void termination_request(int signum) {
@@ -31,6 +32,10 @@ void termination_request(int signum) {
         }
         int status;
         waitpid(pids[i], &status, 0);
+    }
+    printf("Scheduler history: \n");
+    for (int i = 0; i < globalProcess; i++){
+        printf("%d: %s\n", pids[i], prcoess_name[i]);
     }
 
     destroy_priority_queue(queue);
@@ -72,6 +77,7 @@ void scheduler(PriorityQueue* queue) {
                 }
                 else{
                     pids[globalProcess] = P[i].pid;
+                    prcoess_name[globalProcess] = P[i].executable;
                     globalProcess++;
                 }
             }

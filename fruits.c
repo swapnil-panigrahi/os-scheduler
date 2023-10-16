@@ -8,6 +8,6 @@ int fib(int n){
 }
 
 int main(int argc, char** argv){
-    printf("%d\n",fib(45));
+    printf("%d\n",fib(42));
     return 0;
 }
